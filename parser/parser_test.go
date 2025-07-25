@@ -188,6 +188,42 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"3 < 5 == true",
 			"((3 < 5) == true)",
 		},
+		{
+			"1 + (2 + 3) + 4",
+			"((1 + (2 + 3)) + 4)",
+		},
+		{
+			"(5 + 5) * 2",
+			"((5 + 5) * 2)",
+		},
+		{
+			"2 / (5 + 5)",
+			"(2 / (5 + 5))",
+		},
+		{
+			"(5 + 5) * 2 * (5 + 5)",
+			"(((5 + 5) * 2) * (5 + 5))",
+		},
+		{
+			"-(5 + 5)",
+			"(-(5 + 5))",
+		},
+		{
+			"!(true == true)",
+			"(!(true == true))",
+		},
+		{
+			"a + add(b * c) + d",
+			"((a + add((b * c))) + d)",
+		},
+		{
+			"add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8))",
+			"add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)))",
+		},
+		{
+			"add(a + b + c * d / f + g)",
+			"add((((a + b) + ((c * d) / f)) + g))",
+		},
 	}
 
 	for _, tt := range tests {
@@ -213,6 +249,88 @@ func TestBooleanExpression(t *testing.T) {
 		expStmt := testExpressionStatement(t, program.Statements[0])
 		testLiteralExpression(t, expStmt.Expression, tt.expectedBoolean)
 	}
+}
+
+func TestIfExpression(t *testing.T) {
+	input := `if (x < y) { x }`
+
+	program := parseInput(t, input, 1)
+	stmtExp := testExpressionStatement(t, program.Statements[0])
+	ifExp := testIfExpression(t, stmtExp.Expression)
+	testInfixExpression(t, ifExp.Condition, "x", "<", "y")
+	cons := testBlockStatement(t, ifExp.Consequence, 1)
+	innerStmtExp := testExpressionStatement(t, cons.Statements[0])
+	testLiteralExpression(t, innerStmtExp.Expression, "x")
+
+	if ifExp.Alternative != nil {
+		t.Fatalf("ifExp.Alternative was not nil. got=%+v", ifExp.Alternative)
+	}
+}
+
+func TestIfElseExpression(t *testing.T) {
+	input := `if (x < y) { x } else { y }`
+
+	program := parseInput(t, input, 1)
+	stmtExp := testExpressionStatement(t, program.Statements[0])
+	ifExp := testIfExpression(t, stmtExp.Expression)
+	testInfixExpression(t, ifExp.Condition, "x", "<", "y")
+
+	cons := testBlockStatement(t, ifExp.Consequence, 1)
+	consStmtExp := testExpressionStatement(t, cons.Statements[0])
+	testLiteralExpression(t, consStmtExp.Expression, "x")
+
+	alt := testBlockStatement(t, ifExp.Alternative, 1)
+	altStmtExp := testExpressionStatement(t, alt.Statements[0])
+	testLiteralExpression(t, altStmtExp.Expression, "y")
+}
+
+func TestFunctionLiteralParsing(t *testing.T) {
+	input := `fn(x, y) { x + y; }`
+
+	program := parseInput(t, input, 1)
+	stmtExp := testExpressionStatement(t, program.Statements[0])
+	fn := testFunctionLiteral(t, stmtExp.Expression, 2)
+
+	testLiteralExpression(t, fn.Parameters[0], "x")
+	testLiteralExpression(t, fn.Parameters[1], "y")
+
+	block := testBlockStatement(t, fn.Body, 1)
+	blockStmt := testExpressionStatement(t, block.Statements[0])
+	testInfixExpression(t, blockStmt.Expression, "x", "+", "y")
+}
+
+func TestFunctionParameterParsing(t *testing.T) {
+	tests := []struct {
+		input          string
+		expectedParams []string
+	}{
+		{"fn() {};", []string{}},
+		{"fn(x) {};", []string{"x"}},
+		{"fn(x, y, z) {};", []string{"x", "y", "z"}},
+	}
+
+	for _, tt := range tests {
+		program := parseInput(t, tt.input, 1)
+		stmtExp := testExpressionStatement(t, program.Statements[0])
+		lit := testFunctionLiteral(t, stmtExp.Expression, len(tt.expectedParams))
+		for i, param := range tt.expectedParams {
+			testLiteralExpression(t, lit.Parameters[i], param)
+		}
+	}
+}
+
+func TestCallExpressionParsing(t *testing.T) {
+	input := "add(1, 2 * 3, 4 + 5);"
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	call := testCallExpression(t, expStmt.Expression, 3)
+	// function name
+	testLiteralExpression(t, call.Function, "add")
+	// arguments
+	testLiteralExpression(t, call.Arguments[0], 1)
+	testInfixExpression(t, call.Arguments[1], 2, "*", 3)
+	testInfixExpression(t, call.Arguments[2], 4, "+", 5)
 }
 
 // Test an individual let statement with a given name
@@ -257,6 +375,21 @@ func testExpressionStatement(t *testing.T, s ast.Statement) *ast.ExpressionState
 	return expStmt
 }
 
+// Test an expression statement
+func testBlockStatement(t *testing.T, s ast.Statement, expectedStmts int) *ast.BlockStatement {
+	block, ok := s.(*ast.BlockStatement)
+	if !ok {
+		t.Fatalf("s not *ast.BlockStatement. got=%T", s)
+	}
+
+	if expectedStmts >= 0 && len(block.Statements) != expectedStmts {
+		t.Fatalf("block.Statements does not have length %d. got=%d",
+			expectedStmts, len(block.Statements))
+	}
+
+	return block
+}
+
 // Test a prefix expression
 func testPrefixExpression(t *testing.T, e ast.Expression, operator string, right interface{}) *ast.PrefixExpression {
 	exp, ok := e.(*ast.PrefixExpression)
@@ -288,6 +421,46 @@ func testInfixExpression(t *testing.T, e ast.Expression, left interface{}, opera
 
 	testLiteralExpression(t, exp.Left, left)
 	testLiteralExpression(t, exp.Right, right)
+
+	return exp
+}
+
+// Test an in expression
+func testIfExpression(t *testing.T, e ast.Expression) *ast.IfExpression {
+	exp, ok := e.(*ast.IfExpression)
+	if !ok {
+		t.Fatalf("e not *ast.IfExpression. got=%T", e)
+	}
+
+	return exp
+}
+
+// Test a function literal
+func testFunctionLiteral(t *testing.T, e ast.Expression, paramCount int) *ast.FunctionLiteral {
+	lit, ok := e.(*ast.FunctionLiteral)
+	if !ok {
+		t.Fatalf("e not *ast.FunctionLiteral. got=%T", e)
+	}
+
+	if paramCount >= 0 && len(lit.Parameters) != paramCount {
+		t.Fatalf("lit.Parameters does not have length %d. got=%d",
+			paramCount, len(lit.Parameters))
+	}
+
+	return lit
+}
+
+// Test a call expression
+func testCallExpression(t *testing.T, e ast.Expression, argsCount int) *ast.CallExpression {
+	exp, ok := e.(*ast.CallExpression)
+	if !ok {
+		t.Fatalf("e not *ast.CallExpression. got=%T", e)
+	}
+
+	if argsCount >= 0 && len(exp.Arguments) != argsCount {
+		t.Fatalf("exp.Arguments length was not %d. got=%d",
+			argsCount, len(exp.Arguments))
+	}
 
 	return exp
 }
