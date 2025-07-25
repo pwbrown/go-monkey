@@ -333,6 +333,52 @@ func TestCallExpressionParsing(t *testing.T) {
 	testInfixExpression(t, call.Arguments[2], 4, "+", 5)
 }
 
+func TestCallExpressionParameterParsing(t *testing.T) {
+	tests := []struct {
+		input         string
+		expectedIdent string
+		expectedArgs  []string
+	}{
+		{
+			input:         "add();",
+			expectedIdent: "add",
+			expectedArgs:  []string{},
+		},
+		{
+			input:         "add(1);",
+			expectedIdent: "add",
+			expectedArgs:  []string{"1"},
+		},
+		{
+			input:         "add(1, 2 * 3, 4 + 5);",
+			expectedIdent: "add",
+			expectedArgs:  []string{"1", "(2 * 3)", "(4 + 5)"},
+		},
+	}
+
+	for _, tt := range tests {
+		program := parseInput(t, tt.input, 1)
+		expStmt := testExpressionStatement(t, program.Statements[0])
+		call := testCallExpression(t, expStmt.Expression, len(tt.expectedArgs))
+		testIdentifier(t, call.Function, tt.expectedIdent)
+
+		for i, arg := range tt.expectedArgs {
+			if call.Arguments[i].String() != arg {
+				t.Errorf("argument %d wrong. want=%q, got=%q", i,
+					arg, call.Arguments[i].String())
+			}
+		}
+	}
+}
+
+func TestStringLiteralExpression(t *testing.T) {
+	input := `"hello world";`
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	testStringLiteral(t, expStmt.Expression, "hello world")
+}
+
 // Test an individual let statement with a given name
 func testLetStatement(t *testing.T, s ast.Statement, name string) *ast.LetStatement {
 	letStmt, ok := s.(*ast.LetStatement)
@@ -531,10 +577,27 @@ func testBoolean(t *testing.T, e ast.Expression, value bool) *ast.Boolean {
 
 	if boolean.TokenLiteral() != fmt.Sprintf("%t", value) {
 		t.Fatalf("boolean.TokenLiteral() not '%t'. got=%s", value, boolean.TokenLiteral())
-		return nil
 	}
 
 	return boolean
+}
+
+// Test string literal expression
+func testStringLiteral(t *testing.T, e ast.Expression, value string) *ast.StringLiteral {
+	str, ok := e.(*ast.StringLiteral)
+	if !ok {
+		t.Fatalf("e not *ast.StringLiteral. got=%T", e)
+	}
+
+	if str.Value != value {
+		t.Fatalf("string.Value not '%s'. got=%s", value, str.Value)
+	}
+
+	if str.TokenLiteral() != value {
+		t.Fatalf("str.TokenLiteral() not '%s'. got=%s", value, str.TokenLiteral())
+	}
+
+	return str
 }
 
 // Parse an input string, check for errors and statement lenth, and return program
