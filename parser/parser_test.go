@@ -224,6 +224,14 @@ func TestOperatorPrecedenceParsing(t *testing.T) {
 			"add(a + b + c * d / f + g)",
 			"add((((a + b) + ((c * d) / f)) + g))",
 		},
+		{
+			"a * [1, 2, 3, 4][b * c] * d",
+			"((a * ([1, 2, 3, 4][(b * c)])) * d)",
+		},
+		{
+			"add(a * b[2], b[1], 2 * [1, 2][1])",
+			"add((a * (b[2])), (b[1]), (2 * ([1, 2][1])))",
+		},
 	}
 
 	for _, tt := range tests {
@@ -379,6 +387,37 @@ func TestStringLiteralExpression(t *testing.T) {
 	testStringLiteral(t, expStmt.Expression, "hello world")
 }
 
+func TestParsingEmptyArrayLiterals(t *testing.T) {
+	input := "[]"
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	testArrayLiteral(t, expStmt.Expression, 0)
+}
+
+func TestParsingArrayLiterals(t *testing.T) {
+	input := "[1, 2 * 2, 3 + 3]"
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	lit := testArrayLiteral(t, expStmt.Expression, 3)
+
+	testIntegerLiteral(t, lit.Elements[0], 1)
+	testInfixExpression(t, lit.Elements[1], 2, "*", 2)
+	testInfixExpression(t, lit.Elements[2], 3, "+", 3)
+}
+
+func TestParsingIndexExpressions(t *testing.T) {
+	input := "myArray[1 + 1]"
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	exp := testIndexExpression(t, expStmt.Expression)
+
+	testIdentifier(t, exp.Left, "myArray")
+	testInfixExpression(t, exp.Index, 1, "+", 1)
+}
+
 // Test an individual let statement with a given name
 func testLetStatement(t *testing.T, s ast.Statement, name string) *ast.LetStatement {
 	letStmt, ok := s.(*ast.LetStatement)
@@ -506,6 +545,31 @@ func testCallExpression(t *testing.T, e ast.Expression, argsCount int) *ast.Call
 	if argsCount >= 0 && len(exp.Arguments) != argsCount {
 		t.Fatalf("exp.Arguments length was not %d. got=%d",
 			argsCount, len(exp.Arguments))
+	}
+
+	return exp
+}
+
+// Test an array literal
+func testArrayLiteral(t *testing.T, e ast.Expression, elementsCount int) *ast.ArrayLiteral {
+	lit, ok := e.(*ast.ArrayLiteral)
+	if !ok {
+		t.Fatalf("e not *ast.ArrayLiteral. got=%T", e)
+	}
+
+	if elementsCount >= 0 && len(lit.Elements) != elementsCount {
+		t.Fatalf("lit.Elements length was not %d. got=%d",
+			elementsCount, len(lit.Elements))
+	}
+
+	return lit
+}
+
+// Test an index expression
+func testIndexExpression(t *testing.T, e ast.Expression) *ast.IndexExpression {
+	exp, ok := e.(*ast.IndexExpression)
+	if !ok {
+		t.Fatalf("e not *ast.IndexExpression. got=%T", e)
 	}
 
 	return exp
