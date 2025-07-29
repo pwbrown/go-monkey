@@ -2,6 +2,7 @@ package parser
 
 import (
 	"fmt"
+	"strconv"
 	"testing"
 
 	"github.com/pwbrown/go-monkey/ast"
@@ -418,6 +419,99 @@ func TestParsingIndexExpressions(t *testing.T) {
 	testInfixExpression(t, exp.Index, 1, "+", 1)
 }
 
+func TestParsingEmptyHashLiteral(t *testing.T) {
+	input := "{}"
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	testHashLiteral(t, expStmt.Expression, 0)
+}
+
+func TestParsingHashLiteralsStringKeys(t *testing.T) {
+	input := `{"one": 1, "two": 2, "three": 3}`
+
+	expected := map[string]int64{
+		"one":   1,
+		"two":   2,
+		"three": 3,
+	}
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	hash := testHashLiteral(t, expStmt.Expression, len(expected))
+
+	for key, value := range hash.Pairs {
+		testStringLiteral(t, key, key.String())
+		testIntegerLiteral(t, value, expected[key.String()])
+	}
+}
+
+func TestParsingHashLiteralsBooleanKeys(t *testing.T) {
+	input := `{true: 1, false: 2}`
+
+	expected := map[string]int64{
+		"true":  1,
+		"false": 2,
+	}
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	hash := testHashLiteral(t, expStmt.Expression, len(expected))
+
+	for key, value := range hash.Pairs {
+		testBoolean(t, key, key.String() == "true")
+		testIntegerLiteral(t, value, expected[key.String()])
+	}
+}
+
+func TestParsingHashLiteralsIntegerKeys(t *testing.T) {
+	input := `{1: 1, 2: 2, 3: 3}`
+
+	expected := map[string]int64{
+		"1": 1,
+		"2": 2,
+		"3": 3,
+	}
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	hash := testHashLiteral(t, expStmt.Expression, len(expected))
+
+	for key, value := range hash.Pairs {
+		keyInt, err := strconv.ParseInt(key.String(), 0, 0)
+		if err != nil {
+			t.Fatalf("Could not convert key to int")
+		}
+		testIntegerLiteral(t, key, keyInt)
+		testIntegerLiteral(t, value, expected[key.String()])
+	}
+}
+
+func TestParsingHashLiteralsWithExpressions(t *testing.T) {
+	input := `{"one": 0 + 1, "two": 10 - 8, "three": 15 / 5}`
+
+	tests := map[string]func(ast.Expression){
+		"one": func(e ast.Expression) {
+			testInfixExpression(t, e, 0, "+", 1)
+		},
+		"two": func(e ast.Expression) {
+			testInfixExpression(t, e, 10, "-", 8)
+		},
+		"three": func(e ast.Expression) {
+			testInfixExpression(t, e, 15, "/", 5)
+		},
+	}
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	hash := testHashLiteral(t, expStmt.Expression, len(tests))
+
+	for key, value := range hash.Pairs {
+		testStringLiteral(t, key, key.String())
+		tests[key.String()](value)
+	}
+}
+
 // Test an individual let statement with a given name
 func testLetStatement(t *testing.T, s ast.Statement, name string) *ast.LetStatement {
 	letStmt, ok := s.(*ast.LetStatement)
@@ -573,6 +667,20 @@ func testIndexExpression(t *testing.T, e ast.Expression) *ast.IndexExpression {
 	}
 
 	return exp
+}
+
+// Test a hash literal
+func testHashLiteral(t *testing.T, e ast.Expression, expectedPairs int) *ast.HashLiteral {
+	hash, ok := e.(*ast.HashLiteral)
+	if !ok {
+		t.Fatalf("e not *ast.HashLiteral. got=%T", e)
+	}
+
+	if len(hash.Pairs) != expectedPairs {
+		t.Fatalf("hash.Pairs has wrong length. want=%d, got=%d", expectedPairs, len(hash.Pairs))
+	}
+
+	return hash
 }
 
 // Test a literal expression with an expected value

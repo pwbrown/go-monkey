@@ -1,6 +1,10 @@
 package evaluator
 
-import "github.com/pwbrown/go-monkey/object"
+import (
+	"fmt"
+
+	"github.com/pwbrown/go-monkey/object"
+)
 
 var builtins = map[string]*object.Builtin{
 	// Get length of string or array
@@ -103,6 +107,16 @@ var builtins = map[string]*object.Builtin{
 			copy(newElements, arr.Elements)
 			newElements[length] = args[1]
 			return &object.Array{Elements: newElements}
+		},
+	},
+	// Puts a string to the consolue
+	"puts": {
+		Fn: func(args ...object.Object) object.Object {
+			for _, arg := range args {
+				fmt.Println(arg.Inspect())
+			}
+
+			return NULL
 		},
 	},
 }
