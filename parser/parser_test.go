@@ -512,6 +512,20 @@ func TestParsingHashLiteralsWithExpressions(t *testing.T) {
 	}
 }
 
+func TestMacroLiteralParsing(t *testing.T) {
+	input := `macro(x, y) { x + y; }`
+
+	program := parseInput(t, input, 1)
+	expStmt := testExpressionStatement(t, program.Statements[0])
+	macro := testMacroLiteral(t, expStmt.Expression, 2)
+	testLiteralExpression(t, macro.Parameters[0], "x")
+	testLiteralExpression(t, macro.Parameters[1], "y")
+
+	block := testBlockStatement(t, macro.Body, 1)
+	bodyStmt := testExpressionStatement(t, block.Statements[0])
+	testInfixExpression(t, bodyStmt.Expression, "x", "+", "y")
+}
+
 // Test an individual let statement with a given name
 func testLetStatement(t *testing.T, s ast.Statement, name string) *ast.LetStatement {
 	letStmt, ok := s.(*ast.LetStatement)
@@ -681,6 +695,21 @@ func testHashLiteral(t *testing.T, e ast.Expression, expectedPairs int) *ast.Has
 	}
 
 	return hash
+}
+
+// Test a call expression
+func testMacroLiteral(t *testing.T, e ast.Expression, paramsCount int) *ast.MacroLiteral {
+	lit, ok := e.(*ast.MacroLiteral)
+	if !ok {
+		t.Fatalf("e not *ast.MacroLiteral. got=%T", e)
+	}
+
+	if paramsCount >= 0 && len(lit.Parameters) != paramsCount {
+		t.Fatalf("lit.Parameters length was not %d. got=%d",
+			paramsCount, len(lit.Parameters))
+	}
+
+	return lit
 }
 
 // Test a literal expression with an expected value
