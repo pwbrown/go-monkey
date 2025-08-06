@@ -10,7 +10,22 @@ type Opcode byte
 
 const (
 	OpConstant Opcode = iota
+	OpPop
+
+	OpTrue
+	OpFalse
+
 	OpAdd
+	OpSub
+	OpMul
+	OpDiv
+
+	OpMinus
+	OpBang
+
+	OpEqual
+	OpNotEqual
+	OpGreaterThan
 )
 
 // Definition of a single opcode
@@ -22,7 +37,22 @@ type Definition struct {
 // Opcode definitions
 var definitions = map[Opcode]*Definition{
 	OpConstant: {"OpConstant", []int{2}},
-	OpAdd:      {"OpAdd", []int{}},
+	OpPop:      {"OpPop", []int{}},
+
+	OpTrue:  {"OpTrue", []int{}},
+	OpFalse: {"OpTrue", []int{}},
+
+	OpAdd: {"OpAdd", []int{}},
+	OpSub: {"OpSub", []int{}},
+	OpMul: {"OpMul", []int{}},
+	OpDiv: {"OpDiv", []int{}},
+
+	OpMinus: {"OpMinus", []int{}},
+	OpBang:  {"OpBang", []int{}},
+
+	OpEqual:       {"OpEqual", []int{}},
+	OpNotEqual:    {"OpNotEqual", []int{}},
+	OpGreaterThan: {"OpGreaterThan", []int{}},
 }
 
 type Instructions []byte
